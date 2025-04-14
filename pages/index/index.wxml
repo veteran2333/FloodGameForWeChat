@@ -1,0 +1,82 @@
+<view class="game-container">
+  <view class="game-header">
+    <view class="title-section">
+      <text class="game-title">洪水游戏!</text>
+      <button style="width:36px" class="help-btn" bindtap="showRules">?</button>
+    </view>
+    <view class="game-info">
+      <text>步数: {{moves}}/{{maxMoves}}</text>
+      <text>格数: {{gridSize}}x{{gridSize}}</text>
+    </view>
+  </view>
+
+  <view class="game-board {{isShaking ? 'shake' : ''}}">
+    <block wx:for="{{board}}" wx:key="index">
+      <view class="row">
+        <block wx:for="{{item}}" wx:for-item="cell" wx:for-index="colIndex" wx:key="colIndex">
+          <view
+            class="cell {{cell.isObstacle ? 'obstacle' : ''}}"
+            style="background-color: {{cell.isObstacle ? '#666666' : cell.color}}"
+            bindtap="handleCellClick"
+            data-row="{{index}}"
+            data-col="{{colIndex}}"
+          ></view>
+        </block>
+      </view>
+    </block>
+  </view>
+
+  <!-- 颜色选择面板已经被移除，因为我们不允许直接选择颜色 -->
+  <!-- 玩家只能通过点击与洪水区域相邻的格子来改变颜色 -->
+
+  <view class="game-settings">
+    <view class="settings-row">
+      <text>颜色数量：</text>
+      <picker bindchange="onColorCountChange" value="{{colorCount-3}}" range="{{[3,4,5,6,7,8]}}">
+        <view class="picker-view">{{colorCount}}</view>
+      </picker>
+    </view>
+    <view class="settings-row">
+      <text>格子数量：</text>
+      <picker bindchange="onGridSizeChange" value="{{gridSizeOptions.indexOf(gridSize)}}" range="{{[6,8,10,12]}}">
+        <view class="picker-view">{{gridSize}}x{{gridSize}}</view>
+      </picker>
+    </view>
+  </view>
+
+  <button class="new-game-btn" bindtap="restartGame">新游戏</button>
+
+  <!-- 游戏规则模态框 -->
+  <view class="modal" wx:if="{{showRulesModal}}">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">游戏规则</text>
+      </view>
+      <view class="modal-body">
+        <text>1. 从左上角开始，点击与洪水区域相邻的格子来改变洪水颜色</text>
+        <text>2. 只能点击与洪水区域相邻的格子，不能点击洪水区域内的格子</text>
+        <text>3. 目标是在规定步数内用同一种颜色填满整个棋盘</text>
+        <text>4. 障碍物无法被填充</text>
+      </view>
+      <view class="modal-footer">
+        <button bindtap="closeRulesModal">知道了</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 游戏结束模态框 -->
+  <view class="modal" wx:if="{{showGameOverModal}}">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">{{isWin ? '恭喜获胜！' : '游戏结束'}}</text>
+      </view>
+      <view class="modal-body">
+        <text>总步数: {{moves}}</text>
+        <text wx:if="{{!isWin}}">很遗憾，请再接再厉！</text>
+      </view>
+      <view class="modal-footer">
+        <button bindtap="restartGame">再来一局</button>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素洪水!</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f8f9fa; /* Light gray background */
+            padding: 20px;
+            min-height: 100vh; /* Ensure content fills the viewport */
+        }
+
+        h1 {
+            color: #343a40; /* Dark gray heading */
+            margin-bottom: 20px;
+        }
+
+        .game-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 640px; /* Limit width for larger screens */
+            margin-bottom: 20px;
+        }
+
+        .game-board {
+            display: grid;
+            gap: 2px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* 添加阴影效果 */
+            margin-bottom: 20px;
+            width: 100%; /* 确保棋盘宽度占满容器 */
+            aspect-ratio: 1; /* 保持正方形 */
+            background-color: #fff; /* 添加背景色使阴影更明显 */
+            border-radius: 8px; /* 添加圆角使阴影效果更好 */
+            border: 2px solid #c9d5e2;
+            margin-bottom: 20px;
+            overflow: hidden;
+            width: 100%; /* 确保棋盘宽度占满容器 */
+            aspect-ratio: 1; /* 保持正方形 */
+        }
+
+        .cell {
+            /* 移除固定尺寸 */
+            width: 100%;
+            height: 100%;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .cell.obstacle {
+             background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><rect width="30" height="30" fill="black"/><text x="10" y="20" fill="white" font-size="15">X</text></svg>');
+            cursor: not-allowed;
+        }
+
+        .cell.special {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><text x="10" y="20" fill="black" font-size="15">★</text></svg>');
+
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .infinite-moves {
+            color: #dc3545; /* Bootstrap danger color */
+            font-weight: bold;
+        }
+
+        /* Modal Styles */
+        .modal-content {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .rules-section {
+            text-align: left;
+            margin-bottom: 15px;
+        }
+
+        .rules-section h3 {
+            margin-bottom: 5px;
+            color: #0d6efd; /* Bootstrap primary color */
+        }
+
+        .rules-section ul {
+            padding-left: 20px;
+        }
+
+        .invalid-move {
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>洪水游戏!</h1>
+
+    <div class="game-container">
+        <div class="game-info">
+            <div>步数: <span id="moves">0</span>/<span id="max-moves">25</span> <span id="infinite-indicator"
+                    class="infinite-moves" style="display: none;">(∞)</span></div>
+            <div>格数: <span id="grid-size-display">10x10</span></div>
+        </div>
+
+        <div class="game-board" id="game-board"></div>
+
+        <div class="controls">
+            <div class="mb-3 row">
+                <label for="colors" class="col-sm-4 col-form-label">颜色数:</label>
+                <div class="col-sm-8">
+                    <select class="form-select" id="colors">
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6" selected>6</option>
+                        <option value="8">8</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label for="grid-size" class="col-sm-4 col-form-label">格子数:</label>
+                <div class="col-sm-8">
+                    <select class="form-select" id="grid-size">
+                        <option value="6">6x6</option>
+                        <option value="8">8x8</option>
+                        <option value="10" selected>10x10</option>
+                        <option value="14">14x14</option>
+                        <option value="20">20x20</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label for="grid-shape" class="col-sm-4 col-form-label">棋盘形状:</label>
+                <div class="col-sm-8">
+                    <select class="form-select" id="grid-shape">
+                        <option value="square" selected>正方形</option>
+                        <option value="hexagon">六边形</option>
+                        <option value="triangle">三角形</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="obstacles">
+                    <label class="form-check-label" for="obstacles">障碍物</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="special-cells">
+                    <label class="form-check-label" for="special-cells">特殊格子</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="infinite-moves">
+                    <label class="form-check-label" for="infinite-moves">无限步数</label>
+                </div>
+            </div>
+
+            <div class="d-grid">
+                <button type="button" class="btn btn-primary" id="new-game-btn">新游戏</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Button (Using Bootstrap's Button) -->
+    <button type="button" style="color: #fff;border: none;background-color: #0d6efd;" class="btn btn-info position-absolute top-0 end-0 m-3" id="help-button">
+        ?
+    </button>
+
+
+    <!-- Help Modal -->
+    <div class="modal fade" id="help-modal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="helpModalLabel">如何玩洪水游戏</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="rules-section">
+                        <h3>游戏目标</h3>
+                        <p>用尽可能少的步数将整个棋盘填充为单一颜色。</p>
+                    </div>
+
+                        <div class="rules-section">
+                            <h3>玩法介绍</h3>
+                            <ul>
+                                <li>游戏从棋盘的左上角格子开始。</li>
+                                <li>点击任意格子，将当前洪水区域的颜色更改为该格子的颜色。</li>
+                                <li>当你改变颜色时，所有相邻的同色格子都会加入洪水区域。</li>
+                                <li>继续操作，直到整个棋盘变为单一颜色。</li>
+                                <li>尝试在顶部显示的步数限制内完成游戏。</li>
+                                <li>无效操作（选择当前洪水颜色）不会计入步数限制。</li>
+                            </ul>
+                        </div>
+
+                        <div class="rules-section">
+                            <h3>游戏选项</h3>
+                            <ul>
+                                <li><strong>颜色数量:</strong> 选择棋盘上出现的不同颜色数量。</li>
+                                <li><strong>棋盘大小:</strong> 选择棋盘的尺寸。</li>
+                                <li><strong>棋盘形状:</strong> 改变棋盘及其格子的整体形状:
+                                    <ul>
+                                        <li>正方形: 传统的方形网格</li>
+                                        <li>六边形: 蜂窝状排列的六边形格子</li>
+                                        <li>三角形: 网格排列的三角形格子</li>
+                                    </ul>
+                                </li>
+                                <li><strong>障碍物:</strong> 添加无法被洪水淹没的黑色格子，需要绕过它们。</li>
+                                <li><strong>特殊格子:</strong> 添加带有特殊属性的星标格子。</li>
+                                <li><strong>无限步数:</strong> 开启后可以不受步数限制，进行更轻松的游戏。</li>
+                            </ul>
+                        </div>
+
+                        <div class="rules-section">
+                            <h3>策略提示</h3>
+                            <ul>
+                                <li>寻找能够连接棋盘大部分区域的颜色。</li>
+                                <li>尝试提前规划几步。</li>
+                                <li>有时候，选择不会立即占领很多格子的颜色，但可以为后续创造更好的局面。</li>
+                                <li>在有障碍物的情况下，你可能需要绕过它们来到达孤立的区域。</li>
+                            </ul>
+                        </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Win Modal -->
+    <div class="modal fade" id="win-modal" tabindex="-1" aria-labelledby="winModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="winModalLabel">恭喜！</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <p>你已用 <span id="final-moves">0</span> 步完成游戏！</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="new-game-modal-btn">新游戏</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lose Modal -->
+    <div class="modal fade" id="lose-modal" tabindex="-1" aria-labelledby="loseModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loseModalLabel">游戏结束</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <p>你的步数已用完！</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="try-again-btn">再试一次</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Bootstrap JS (Optional, but required for Modals) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+        crossorigin="anonymous"></script>
+    <script>
+        // --- Game State ---
+        let gameState = {
+            board: [],
+            size: 10,
+            colors: 6,
+            shape: 'square',
+            hasObstacles: false,
+            hasSpecialCells: false,
+            infiniteMoves: false,
+            moves: 0,
+            maxMoves: 25,
+            floodedCells: new Set(),
+            colorPalette: [
+                '#FF5252', // Red
+                '#4CAF50', // Green
+                '#2196F3', // Blue
+                '#FFEB3B', // Yellow
+                '#9C27B0', // Purple
+                '#FF9800', // Orange
+                '#00BCD4', // Cyan
+                '#795548'  // Brown
+            ]
+        };
+
+        // --- DOM Elements ---
+        const gameBoard = document.getElementById('game-board');
+        const movesDisplay = document.getElementById('moves');
+        const maxMovesDisplay = document.getElementById('max-moves');
+        const infiniteIndicator = document.getElementById('infinite-indicator');
+        const gridSizeDisplay = document.getElementById('grid-size-display');
+        const colorsSelect = document.getElementById('colors');
+        const gridSizeSelect = document.getElementById('grid-size');
+        const gridShapeSelect = document.getElementById('grid-shape');
+        const obstaclesCheckbox = document.getElementById('obstacles');
+        const specialCellsCheckbox = document.getElementById('special-cells');
+        const infiniteMovesCheckbox = document.getElementById('infinite-moves');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const helpButton = document.getElementById('help-button');
+        const helpModal = document.getElementById('help-modal');
+        const winModal = document.getElementById('win-modal');
+        const loseModal = document.getElementById('lose-modal');
+        const finalMovesDisplay = document.getElementById('final-moves');
+        const newGameModalBtn = document.getElementById('new-game-modal-btn');
+        const tryAgainBtn = document.getElementById('try-again-btn');
+
+        // Bootstrap Modal Instances (for programmatic control)
+        const helpModalInstance = new bootstrap.Modal(helpModal);
+        const winModalInstance = new bootstrap.Modal(winModal);
+        const loseModalInstance = new bootstrap.Modal(loseModal);
+
+        // --- Game Functions ---
+
+        // Initialize the game
+        function initGame() {
+            gameState.moves = 0;
+            gameState.floodedCells = new Set();
+            movesDisplay.textContent = gameState.moves;
+            maxMovesDisplay.textContent = gameState.maxMoves;
+            infiniteIndicator.style.display = gameState.infiniteMoves ? 'inline' : 'none';
+            gridSizeDisplay.textContent = `${gameState.size}x${gameState.size}`;
+            createBoard();
+            const startCell = gameState.board[0][0];
+            if (!startCell.isObstacle) {
+                gameState.floodedCells.add('0,0');
+                floodFill(0, 0, startCell.color, startCell.color);
+                updateBoardDisplay();
+            }
+        }
+
+        // Create the game board
+        // Create the game board
+        function createBoard() {
+          gameState.board = [];
+          gameBoard.innerHTML = '';
+          
+          // 动态计算格子尺寸
+          const boardSize = Math.min(600, window.innerWidth * 0.8); // 限制最大尺寸
+          gameBoard.style.width = `${boardSize}px`;
+          
+          gameBoard.style.gridTemplateColumns = `repeat(${gameState.size}, 1fr)`;
+          gameState.maxMoves = Math.floor(gameState.size * 1.5 + gameState.colors);
+          maxMovesDisplay.textContent = gameState.maxMoves;
+
+          for (let row = 0; row < gameState.size; row++) {
+              gameState.board[row] = [];
+              for (let col = 0; col < gameState.size; col++) {
+                  const cell = document.createElement('div');
+                  cell.className = 'cell';
+                  cell.dataset.row = row;
+                  cell.dataset.col = col;
+                  let isObstacle = false;
+                  let isSpecial = false;
+
+                  if (gameState.hasObstacles && Math.random() < 0.05 && !(row === 0 && col === 0)) {
+                      isObstacle = true;
+                      cell.classList.add('obstacle');
+                  } else if (gameState.hasSpecialCells && Math.random() < 0.05 && !(row === 0 && col === 0)) {
+                      isSpecial = true;
+                      cell.classList.add('special');
+                  }
+                  const colorIndex = Math.floor(Math.random() * gameState.colors);
+                  const color = isObstacle ? '#000000' : gameState.colorPalette[colorIndex];
+                  cell.style.backgroundColor = color;
+                  gameBoard.appendChild(cell);
+                  gameState.board[row][col] = { color, isObstacle, isSpecial };
+                  cell.addEventListener('click', handleCellClick);
+              }
+          }
+          if (gameState.shape !== 'square') {
+              applyGridShape();
+          }
+        }
+        // Handle cell click
+        function handleCellClick(event) {
+            const cell = event.target;
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            const clickedColor = gameState.board[row][col].color;
+            const currentColor = getCurrentFloodColor();
+
+            if (gameState.board[row][col].isObstacle) {
+                return;
+            }
+
+            // 检查是否点击左上角格子
+            if (row === 0 && col === 0) {
+                gameBoard.classList.add('invalid-move');
+                setTimeout(() => gameBoard.classList.remove('invalid-move'), 500);
+                return;
+            }
+
+            if (clickedColor === currentColor) {
+                gameBoard.classList.add('invalid-move');
+                setTimeout(() => gameBoard.classList.remove('invalid-move'), 500);
+                return;
+            }
+
+            makeMove(clickedColor);
+        }
+
+        // Get the current flood color
+        function getCurrentFloodColor() {
+            for (const coords of gameState.floodedCells) {
+                const [row, col] = coords.split(',').map(Number);
+                return gameState.board[row][col].color;
+            }
+            return null;
+        }
+
+        // Make a move
+        function makeMove(newColor) {
+            gameState.moves++;
+            movesDisplay.textContent = gameState.moves;
+            const currentColor = getCurrentFloodColor();
+            const floodedCellsArray = Array.from(gameState.floodedCells);
+            for (const coords of floodedCellsArray) {
+                const [row, col] = coords.split(',').map(Number);
+                floodFill(row, col, currentColor, newColor);
+            }
+            updateBoardDisplay();
+            checkGameStatus();
+        }
+
+        // Flood fill
+        function floodFill(row, col, oldColor, newColor) {
+            if (!gameState.board[row][col].isObstacle) {
+                gameState.board[row][col].color = newColor;
+                gameState.floodedCells.add(`${row},${col}`);
+            }
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dx, dy] of directions) {
+                const newRow = row + dx;
+                const newCol = col + dy;
+                if (
+                    newRow >= 0 && newRow < gameState.size &&
+                    newCol >= 0 && newCol < gameState.size &&
+                    gameState.board[newRow][newCol].color === oldColor &&
+                    !gameState.board[newRow][newCol].isObstacle &&
+                    !gameState.floodedCells.has(`${newRow},${newCol}`)
+                ) {
+                    floodFill(newRow, newCol, oldColor, newColor);
+                }
+            }
+        }
+
+        // Update board display
+        function updateBoardDisplay() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                setTimeout(() => { cell.style.backgroundColor = gameState.board[row][col].color; }, 50 * (row + col) / 2);
+            });
+        }
+
+      // Check game status (Win/Lose)
+        function checkGameStatus() {
+            const firstCell = gameState.board[0][0];
+            let targetColor = firstCell.isObstacle ? null : firstCell.color;
+
+            if (targetColor === null) {
+                //If first cell is obstacle
+            outerLoop:
+            for (let r = 0; r < gameState.size; r++) {
+                for (let c = 0; c < gameState.size; c++) {
+                    if (!gameState.board[r][c].isObstacle) {
+                        targetColor = gameState.board[r][c].color;
+                        break outerLoop;
+                    }
+                }
+            }
+            }
+            if (targetColor === null) return;
+        
+            for (let row = 0; row < gameState.size; row++) {
+                for (let col = 0; col < gameState.size; col++) {
+                    const cell = gameState.board[row][col];
+                    if (!cell.isObstacle && cell.color !== targetColor) {
+                        if (!gameState.infiniteMoves && gameState.moves >= gameState.maxMoves) {
+                            setTimeout(() => { loseModalInstance.show(); }, 500); // Bootstrap modal
+                        }
+                        return;
+                    }
+                }
+            }
+
+            finalMovesDisplay.textContent = gameState.moves;
+
+            setTimeout(() => {
+                winModalInstance.show();  // Use Bootstrap modal show method
+
+                // --- Spectacular Confetti Effect (Improved) ---
+
+                // Temporarily hide overflow to prevent scrollbars during confetti
+                document.body.style.overflow = 'hidden';
+
+                // Function to create a confetti burst (No Changes here)
+                function confettiBurst(originX, angle) {
+                    confetti({
+                        particleCount: 200,
+                        spread: 50,
+                        angle: angle,
+                        origin: { x: originX, y: 1 },
+                        startVelocity: 60,
+                        gravity: 0.8,
+                        ticks: 300,
+                        scalar: 1.2
+                    });
+                }
+
+                // Left-to-right burst
+                confettiBurst(0, 45);
+
+                // Right-to-left burst
+                confettiBurst(1, 135);
+
+                // Additional smaller bursts (optional)
+                confettiBurst(0, 60);
+                confettiBurst(1, 120);
+
+                // Restore overflow after confetti is done (adjust timeout as needed)
+                setTimeout(() => {
+                  document.body.style.overflow = ''; // Or 'auto' if you prefer
+                }, 1000);  // 1 second delay (should be enough)
+
+            }, 500);
+        }
+
+
+        // Apply grid shapes
+        function applyGridShape() {
+            const cells = document.querySelectorAll('.cell');
+            if (gameState.shape === 'hexagon') {
+                gameBoard.style.gridTemplateColumns = `repeat(${gameState.size}, 26px)`;
+                cells.forEach((cell, index) => {
+                    const row = Math.floor(index / gameState.size);
+                    cell.style.clipPath = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
+                    cell.style.margin = '0 -3px';
+                    if (row % 2 === 1) { cell.style.transform = 'translateX(13px)'; }
+                });
+            } else if (gameState.shape === 'triangle') {
+                gameBoard.style.gridTemplateColumns = `repeat(${gameState.size}, 30px)`;
+                cells.forEach((cell, index) => {
+                    const row = Math.floor(index / gameState.size);
+                    const col = index % gameState.size;
+                    if ((row + col) % 2 === 0) {
+                        cell.style.clipPath = 'polygon(50% 0%, 100% 100%, 0% 100%)';
+                    } else {
+                        cell.style.clipPath = 'polygon(0% 0%, 100% 0%, 50% 100%)';
+                    }
+                });
+            }
+        }
+
+        // --- Event Listeners ---
+        newGameBtn.addEventListener('click', () => {
+            gameState.size = parseInt(gridSizeSelect.value);
+            gameState.colors = parseInt(colorsSelect.value);
+            gameState.shape = gridShapeSelect.value;
+            gameState.hasObstacles = obstaclesCheckbox.checked;
+            gameState.hasSpecialCells = specialCellsCheckbox.checked;
+            gameState.infiniteMoves = infiniteMovesCheckbox.checked;
+            initGame();
+        });
+
+        newGameModalBtn.addEventListener('click', () => {
+            winModalInstance.hide(); // Bootstrap modal
+            gameState.size = parseInt(gridSizeSelect.value);
+            gameState.colors = parseInt(colorsSelect.value);
+            gameState.shape = gridShapeSelect.value;
+            gameState.hasObstacles = obstaclesCheckbox.checked;
+            gameState.hasSpecialCells = specialCellsCheckbox.checked;
+            gameState.infiniteMoves = infiniteMovesCheckbox.checked;
+            initGame();
+        });
+
+        tryAgainBtn.addEventListener('click', () => {
+            loseModalInstance.hide(); // Bootstrap modal
+            initGame();
+        });
+
+        //Use js to control model
+        helpButton.addEventListener('click', () => { helpModalInstance.show(); });
+        window.addEventListener('load', initGame);
+
+    </script>
+
+</body>
+
+</html>
